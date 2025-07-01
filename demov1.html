@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>End-to-End Interactive Explainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        html { scroll-behavior: smooth; }
+        body { background-color: #f1f5f9; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        .section-card { background-color: white; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); padding: 2rem; margin-bottom: 2rem; }
+        
+        /* Ingestion Styles */
+        .ingestion-option-btn { transition: all 0.3s ease-in-out; border: 2px solid transparent; }
+        .ingestion-option-btn.active { border-color: #3b82f6; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transform: translateY(-3px); }
+        .sub-option-btn.active { background-color: #3b82f6; color: white; }
+
+        /* Flow Diagram Styles */
+        .flow-diagram { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; }
+        @media (min-width: 768px) {
+            .flow-diagram { flex-direction: row; }
+        }
+        .flow-item { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 1rem; background-color: #f8fafc; border: 1px solid #e5e7eb; border-radius: 0.75rem; width: 160px; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .flow-item:hover { transform: translateY(-5px) scale(1.05); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 5; }
+        .flow-item.highlight-green { border-width: 2px; border-color: #16a34a; background-color: #dcfce7; }
+        .flow-item.highlight-purple { border-width: 2px; border-color: #7c3aed; background-color: #f5f3ff; }
+        .flow-item.highlight-red { border-width: 2px; border-color: #dc2626; background-color: #fee2e2; }
+        .flow-item i { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        @keyframes flow-animation { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+        .flow-arrow { font-size: 2.5rem; margin: 0.5rem 1rem; transform: rotate(90deg); }
+        @media (min-width: 768px) {
+            .flow-arrow { transform: rotate(0deg); }
+        }
+        .flow-arrow i { background: linear-gradient(to left, #3b82f6 50%, #d1d5db 50%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: flow-animation 2s linear infinite; }
+        
+        /* Pros and Cons List Styles */
+        .pros-cons-container { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+        @media (min-width: 640px) { .pros-cons-container { grid-template-columns: 1fr 1fr; } }
+        .pros-card { background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 1rem; border-radius: 0.5rem; }
+        .cons-card { background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 1rem; border-radius: 0.5rem; }
+        .pros-card ul, .cons-card ul { list-style: none; padding-left: 0; }
+        .pros-card li, .cons-card li { display: flex; align-items: flex-start; margin-bottom: 0.5rem; }
+        .pros-card li i, .cons-card li i { margin-right: 0.75rem; margin-top: 0.25rem; }
+
+        /* RBAC & RAG Styles */
+        .code-block { background-color: #1f2937; color: #d1d5db; padding: 1rem; border-radius: 0.5rem; font-family: 'Courier New', Courier, monospace; font-size: 0.875rem; white-space: pre-wrap; }
+        .redacted { background-color: #1f2937; color: #1f2937; user-select: none; border-radius: 3px; }
+        .status-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.5rem; border-radius: 9999px; font-weight: 500; font-size: 0.75rem; }
+        .status-badge.pii { background-color: #fee2e2; color: #991b1b; }
+        .status-badge.sensitive { background-color: #ffedd5; color: #9a3412; }
+
+        /* Tooltip */
+        #tooltip { position: absolute; background-color: #1f2937; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; pointer-events: none; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; z-index: 10; max-width: 250px; text-align: center; }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="w-full max-w-6xl mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl sm:text-5xl font-bold text-slate-800">The Complete Gen AI Workflow</h1>
+            <p class="text-xl text-slate-600 mt-2">From Data Ingestion to Secure, Intelligent Search</p>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="sticky top-4 bg-white/70 backdrop-blur-md rounded-xl shadow-md z-20 mb-12">
+            <div class="flex justify-center items-center p-4 gap-4 md:gap-8">
+                <a href="#ingestion" class="nav-link font-semibold text-slate-600 hover:text-blue-600 transition">1. Data Ingestion</a>
+                <a href="#rbac" class="nav-link font-semibold text-slate-600 hover:text-blue-600 transition">2. RBAC Security</a>
+                <a href="#rag" class="nav-link font-semibold text-slate-600 hover:text-blue-600 transition">3. RAG Search</a>
+            </div>
+        </nav>
+
+        <!-- Section 1: Ingestion -->
+        <section id="ingestion" class="section-card fade-in">
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">Part 1: The Data Ingestion Pipeline</h2>
+            <p class="text-slate-600 mb-8">First, we need to securely get data from our sources into the AWS knowledge base. We have two primary plans based on infrastructure readiness.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                <div id="btn-option1" class="ingestion-option-btn p-6 rounded-lg bg-white cursor-pointer active border-2">
+                    <h3 class="text-xl font-bold text-slate-800">Option 1: IPsec Tunnel Ready</h3>
+                    <p class="text-slate-500 mt-1 text-sm">The long-term, secure, and automated solution.</p>
+                </div>
+                <div id="btn-option2" class="ingestion-option-btn p-6 rounded-lg bg-white cursor-pointer border-2">
+                    <h3 class="text-xl font-bold text-slate-800">Option 2: No Tunnel (Interim)</h3>
+                    <p class="text-slate-500 mt-1 text-sm">Our contingency plan to ensure project progress.</p>
+                </div>
+            </div>
+
+            <!-- Ingestion Option 1 Content -->
+            <div id="content-option1">
+                <div class="bg-slate-50 p-6 rounded-lg">
+                    <h4 class="text-xl font-bold text-blue-600 mb-4 text-center">Workflow: Azure Data Factory via IPsec Tunnel</h4>
+                    <div class="flow-diagram">
+                        <div class="flow-item" data-tooltip="Source data in Azure"><i class="fab fa-azure text-blue-500"></i><span class="font-semibold">Azure Source</span></div>
+                        <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                        <div class="flow-item" data-tooltip="Orchestrates data movement"><i class="fas fa-network-wired text-blue-500"></i><span class="font-semibold">ADF Pipeline</span></div>
+                        <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                        <div class="flow-item highlight-green" data-tooltip="Secure private network"><i class="fas fa-user-shield text-green-500"></i><span class="font-semibold">IPsec Tunnel</span></div>
+                        <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                        <div class="flow-item" data-tooltip="Destination knowledge base"><i class="fas fa-search text-orange-500"></i><span class="font-semibold">OpenSearch</span></div>
+                    </div>
+                    <div class="mt-8 pros-cons-container">
+                        <div class="pros-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Pros:</h4><ul><li><i class="fas fa-check-circle text-green-600"></i>Most Secure</li><li><i class="fas fa-check-circle text-green-600"></i>Fully Automated</li><li><i class="fas fa-check-circle text-green-600"></i>Low Maintenance</li></ul></div>
+                        <div class="cons-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Cons:</h4><ul><li><i class="fas fa-times-circle text-red-600"></i>Dependency on Infra Team</li></ul></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ingestion Option 2 Content -->
+            <div id="content-option2" class="hidden">
+                 <div class="bg-slate-50 p-6 rounded-lg">
+                    <div class="flex justify-center gap-4 mb-6">
+                        <button id="btn-approach-a" class="sub-option-btn font-semibold py-2 px-4 rounded-lg bg-white border-2 active">Recommended</button>
+                        <button id="btn-approach-b" class="sub-option-btn font-semibold py-2 px-4 rounded-lg bg-white border-2">Kickstart</button>
+                    </div>
+                    <!-- Approach A -->
+                    <div id="content-approach-a">
+                        <h4 class="text-xl font-bold text-purple-600 mb-4 text-center">Workflow: Self-Hosted IR via Public API</h4>
+                        <div class="flow-diagram">
+                            <div class="flow-item" data-tooltip="Source data in Azure"><i class="fab fa-azure text-blue-500"></i><span class="font-semibold">Azure Source</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item highlight-purple" data-tooltip="Runs on an Azure VM"><i class="fas fa-server text-purple-500"></i><span class="font-semibold">Self-Hosted IR</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item" data-tooltip="Secure public endpoint"><i class="fas fa-globe text-purple-500"></i><span class="font-semibold">Public API</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item" data-tooltip="Destination knowledge base"><i class="fas fa-search text-orange-500"></i><span class="font-semibold">OpenSearch</span></div>
+                        </div>
+                        <div class="mt-8 pros-cons-container">
+                            <div class="pros-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Pros:</h4><ul><li><i class="fas fa-check-circle text-green-600"></i>Unblocks Dev</li><li><i class="fas fa-check-circle text-green-600"></i>Future-Proof</li></ul></div>
+                            <div class="cons-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Cons:</h4><ul><li><i class="fas fa-times-circle text-red-600"></i>Public Traffic</li><li><i class="fas fa-times-circle text-red-600"></i>Requires VM Maintenance</li></ul></div>
+                        </div>
+                    </div>
+                    <!-- Approach B -->
+                    <div id="content-approach-b" class="hidden">
+                        <h4 class="text-xl font-bold text-red-600 mb-4 text-center">Workflow: One-Time Manual Ingestion</h4>
+                        <div class="flow-diagram">
+                            <div class="flow-item" data-tooltip="Local files"><i class="fas fa-file-alt text-blue-500"></i><span class="font-semibold">Source Docs</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item highlight-red" data-tooltip="Python script upload"><i class="fas fa-user-cog text-red-500"></i><span class="font-semibold">Manual Upload</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item" data-tooltip="Staging area in AWS"><i class="fab fa-aws text-orange-500"></i><span class="font-semibold">S3 Bucket</span></div>
+                            <div class="flow-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                            <div class="flow-item" data-tooltip="Destination knowledge base"><i class="fas fa-search text-orange-500"></i><span class="font-semibold">OpenSearch</span></div>
+                        </div>
+                         <div class="mt-8 pros-cons-container">
+                            <div class="pros-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Pros:</h4><ul><li><i class="fas fa-check-circle text-green-600"></i>Fastest Start</li><li><i class="fas fa-check-circle text-green-600"></i>Very Simple</li></ul></div>
+                            <div class="cons-card"><h4 class="font-bold text-lg text-slate-700 mb-2">Cons:</h4><ul><li><i class="fas fa-times-circle text-red-600"></i>Not Scalable</li><li><i class="fas fa-times-circle text-red-600"></i>Stale Data</li><li><i class="fas fa-times-circle text-red-600"></i>Rework Needed</li></ul></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: RBAC -->
+        <section id="rbac" class="section-card fade-in">
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">Part 2: The RBAC Security Model</h2>
+            <p class="text-slate-600 mb-8">Once data is ingested, we enforce security using metadata. We use a single, cost-effective index and apply filters at query time to control who sees what.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center mb-8">
+                <div>
+                    <h3 class="font-semibold text-lg text-slate-700 mb-4">Metadata "Sidecar" Files</h3>
+                    <div class="code-block">
+                        <span style="color: #9cdcfe;">{</span><br>
+                        &nbsp;&nbsp;<span style="color: #d4d4d4;">"role_ids": ["finance_manager"],</span><br>
+                        &nbsp;&nbsp;<span style="color: #d4d4d4;">"is_public": false</span><br>
+                        <span style="color: #9cdcfe;">}</span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <div class="mt-2 text-left inline-block bg-slate-50 p-4 rounded-lg border">
+                        <p><i class="fas fa-file-pdf text-red-500 mr-2"></i> report.pdf</p>
+                        <p><i class="fas fa-file-code text-gray-500 mr-2"></i> report.pdf<strong class="text-blue-600">.meta.json</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center p-4 bg-slate-100 rounded-lg">
+                <p class="font-semibold">User Query: <span class="font-mono text-blue-700">"Search for project reports"</span></p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+                    <h3 class="font-bold text-lg text-green-800"><i class="fas fa-user-shield mr-2"></i>Role: `finance_manager`</h3>
+                    <p class="text-sm text-green-700 mt-2">Filter Added: <code class="text-xs bg-green-100 p-1 rounded">{ "role_ids": "finance_manager" }</code></p>
+                    <div class="p-3 bg-white rounded border mt-2"><p class="text-sm"><i class="fas fa-check mr-2"></i>Result: report.pdf</p></div>
+                </div>
+                <div class="bg-red-50 p-6 rounded-lg border border-red-200">
+                    <h3 class="font-bold text-lg text-red-800"><i class="fas fa-user-slash mr-2"></i>Role: `project_manager`</h3>
+                    <p class="text-sm text-red-700 mt-2">Filter Added: <code class="text-xs bg-red-100 p-1 rounded">{ "role_ids": "project_manager" }</code></p>
+                    <div class="p-3 bg-white rounded border mt-2"><p class="text-sm text-slate-500 italic"><i class="fas fa-times mr-2"></i>Result: 0 documents found.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: RAG -->
+        <section id="rag" class="section-card fade-in">
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">Part 3: The RAG Search Workflow</h2>
+            <p class="text-slate-600 mb-8">This is how the system answers a user's query, applying safety guardrails at every step.</p>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Pane 1: Chat & Query -->
+                <div class="bg-slate-50 p-6 rounded-xl border">
+                    <h3 class="font-bold text-xl text-slate-700 flex items-center mb-4"><i class="fas fa-comments mr-3 text-blue-500"></i>1. User Query</h3>
+                    <div id="chat-window" class="h-48 mb-4">
+                         <div class="flex justify-end">
+                            <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs text-sm">Select a query below...</div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <button data-question="grant-number" class="query-btn w-full text-left p-2 bg-white rounded-lg border-2 hover:border-blue-500"><p class="font-semibold text-xs">Standard Query</p></button>
+                        <button data-question="pii" class="query-btn w-full text-left p-2 bg-white rounded-lg border-2 hover:border-blue-500"><p class="font-semibold text-xs">PII Query</p></button>
+                        <button data-question="financial" class="query-btn w-full text-left p-2 bg-white rounded-lg border-2 hover:border-blue-500"><p class="font-semibold text-xs">Sensitive Data Query</p></button>
+                    </div>
+                </div>
+
+                <!-- Pane 2: Internal Processing -->
+                <div id="pane-2" class="bg-slate-50 p-6 rounded-xl border opacity-0">
+                    <h3 class="font-bold text-xl text-slate-700 flex items-center mb-4"><i class="fas fa-cogs mr-3 text-orange-500"></i>2. Processing</h3>
+                    <div class="space-y-4">
+                        <div class="border-l-4 border-blue-400 pl-4">
+                            <h4 class="font-semibold text-blue-700 text-sm">Retrieval</h4>
+                            <p id="retrieval-content" class="text-xs text-slate-600 mt-1"></p>
+                        </div>
+                        <div class="border-l-4 border-orange-400 pl-4">
+                            <h4 class="font-semibold text-orange-700 text-sm">Guardrails</h4>
+                            <p id="guardrail-content" class="text-xs text-slate-600 mt-1"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pane 3: Final Result -->
+                <div id="pane-3" class="bg-slate-50 p-6 rounded-xl border opacity-0">
+                    <h3 class="font-bold text-xl text-slate-700 flex items-center mb-4"><i class="fas fa-lightbulb mr-3 text-green-500"></i>3. Final Result</h3>
+                     <div class="border-l-4 border-green-400 pl-4">
+                        <h4 class="font-semibold text-green-700 text-sm">Generation</h4>
+                        <div id="llm-content" class="text-slate-800 mt-1 text-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        // --- Combined Script ---
+
+        // --- Part 1: Ingestion Logic ---
+        const btnOption1 = document.getElementById('btn-option1');
+        const btnOption2 = document.getElementById('btn-option2');
+        const contentOption1 = document.getElementById('content-option1');
+        const contentOption2 = document.getElementById('content-option2');
+        const btnApproachA = document.getElementById('btn-approach-a');
+        const btnApproachB = document.getElementById('btn-approach-b');
+        const contentApproachA = document.getElementById('content-approach-a');
+        const contentApproachB = document.getElementById('content-approach-b');
+
+        btnOption1.addEventListener('click', () => {
+            btnOption1.classList.add('active');
+            btnOption2.classList.remove('active');
+            contentOption1.classList.remove('hidden');
+            contentOption2.classList.add('hidden');
+        });
+        btnOption2.addEventListener('click', () => {
+            btnOption2.classList.add('active');
+            btnOption1.classList.remove('active');
+            contentOption2.classList.remove('hidden');
+            contentOption1.classList.add('hidden');
+        });
+        btnApproachB.addEventListener('click', () => {
+            btnApproachB.classList.add('active');
+            btnApproachA.classList.remove('active');
+            contentApproachB.classList.remove('hidden');
+            contentApproachA.classList.add('hidden');
+        });
+        btnApproachA.addEventListener('click', () => {
+            btnApproachA.classList.add('active');
+            btnApproachB.classList.remove('active');
+            contentApproachA.classList.remove('hidden');
+            contentApproachB.classList.add('hidden');
+        });
+
+        // --- Part 2 & 3: RAG & RBAC Logic ---
+        const queryButtons = document.querySelectorAll('.query-btn');
+        const chatWindow = document.getElementById('chat-window');
+        const pane2 = document.getElementById('pane-2');
+        const pane3 = document.getElementById('pane-3');
+        const retrievalContent = document.getElementById('retrieval-content');
+        const guardrailContent = document.getElementById('guardrail-content');
+        const llmContent = document.getElementById('llm-content');
+
+        const scenarios = {
+            'grant-number': { query: "What is the grant number for the 'Rural Health Initiative'?", retrievedChunk: `<strong>Retrieved:</strong> "...grant number 90AC2345..."`, guardrailAction: `<strong>Action:</strong> No sensitive data. Proceed.`, llmResponse: `<p>The grant number is 90AC2345.</p>` },
+            'pii': { query: "What is the PO's name for grant number 90AC2345?", retrievedChunk: `<p class="italic">Retrieval skipped.</p>`, guardrailAction: `<strong>Action:</strong> <span class="status-badge pii">PII Detected</span>. Blocking.`, llmResponse: `<p>I cannot provide PII such as names. This policy protects personal privacy.</p>` },
+            'financial': { query: "What are the grantee details and award amount for 90AC2345?", retrievedChunk: `<strong>Retrieved:</strong> "...awarded to <span class="redacted">Springfield Hospital</span>...amount is <span class="redacted">$1.5M</span>..."`, guardrailAction: `<strong>Action:</strong> <span class="status-badge sensitive">Data Redacted</span>.`, llmResponse: `<p>Grant 90AC2345 was awarded to [REDACTED]. The total award amount is [REDACTED].</p>` }
+        };
+
+        queryButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                pane2.style.opacity = 0; pane3.style.opacity = 0;
+                pane2.classList.remove('fade-in'); pane3.classList.remove('fade-in');
+                
+                const scenarioKey = button.dataset.question;
+                if (!scenarioKey) return;
+                const scenario = scenarios[scenarioKey];
+
+                chatWindow.innerHTML = `<div class="flex justify-end"><div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs text-sm">${scenario.query}</div></div>`;
+                
+                setTimeout(() => {
+                    pane2.style.opacity = 1; pane2.classList.add('fade-in');
+                    retrievalContent.innerHTML = scenario.retrievedChunk;
+                    guardrailContent.innerHTML = scenario.guardrailAction;
+                }, 400);
+
+                setTimeout(() => {
+                    pane3.style.opacity = 1; pane3.classList.add('fade-in');
+                    llmContent.innerHTML = scenario.llmResponse;
+                }, 1000);
+            });
+        });
+
+        // --- Global: Tooltip Logic ---
+        const tooltip = document.getElementById('tooltip');
+        const flowItems = document.querySelectorAll('.flow-item');
+        flowItems.forEach(item => {
+            item.addEventListener('mousemove', (e) => {
+                tooltip.style.opacity = '1'; tooltip.style.transform = 'translateY(0)';
+                tooltip.innerHTML = item.dataset.tooltip;
+                let x = e.clientX, y = e.clientY;
+                tooltip.style.left = (x + 15) + 'px';
+                tooltip.style.top = (y + 15) + 'px';
+                const tooltipRect = tooltip.getBoundingClientRect();
+                if (tooltipRect.right > window.innerWidth) { tooltip.style.left = (x - tooltipRect.width - 15) + 'px'; }
+                if (tooltipRect.bottom > window.innerHeight) { tooltip.style.top = (y - tooltipRect.height - 15) + 'px'; }
+            });
+            item.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; tooltip.style.transform = 'translateY(10px)'; });
+        });
+
+        // --- Global: Nav Scroll-Spy Logic ---
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section');
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 100) { current = section.getAttribute('id'); }
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('text-blue-600', 'font-bold');
+                if (link.getAttribute('href').includes(current)) {
+                    link.classList.add('text-blue-600', 'font-bold');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
